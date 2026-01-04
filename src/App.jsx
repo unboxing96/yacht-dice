@@ -193,14 +193,14 @@ const Dice = ({ value, isHeld, onClick, rolling, disabled, soundEnabled }) => {
     </button>
   );
 };
-const CategoryIcon = ({ id, section }) => {
+const CategoryIcon = ({ id, section, className = "w-10 h-10" }) => {
   const container = (children) => (
-    <div className="relative w-10 h-10 rounded-lg bg-white border-2 border-gray-200 shadow-sm overflow-hidden flex items-center justify-center flex-shrink-0">
+    <div className={`relative rounded-lg bg-white border-2 border-gray-200 shadow-sm overflow-hidden flex items-center justify-center flex-shrink-0 ${className}`}>
       {children}
     </div>
   );
   const dot = (x, y, i) => (
-    <div key={i} className="absolute bg-slate-700 rounded-full" style={{ width: 6, height: 6, left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }} />
+    <div key={i} className="absolute bg-slate-700 rounded-full" style={{ width: '16%', height: '16%', left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }} />
   );
   const DiceFace = ({ value }) => {
     const L = 18, C = 50, R = 82, T = 18, M = 50, B = 82;
@@ -213,13 +213,13 @@ const CategoryIcon = ({ id, section }) => {
   if (section === 'upper') {
     const UPPER_ICON_MAP = { ones: onesIcon, twos: twosIcon, threes: threesIcon, fours: foursIcon, fives: fivesIcon, sixes: sixesIcon };
     const url = UPPER_ICON_MAP[id];
-    if (url) return container(<img src={url} alt={id} className="w-7 h-7 object-contain" draggable={false} />);
+    if (url) return container(<img src={url} alt={id} className="w-full h-full object-contain p-1" draggable={false} />);
     const order = { ones: 1, twos: 2, threes: 3, fours: 4, fives: 5, sixes: 6 };
     return <DiceFace value={order[id]} />;
   }
   const LOWER_ICON_MAP = { choice: choiceIcon, fourOfAKind: fourOfAKindIcon, fullHouse: fullHouseIcon, smallStraight: smallStraightIcon, largeStraight: largeStraightIcon, yacht: yachtIcon };
   const url = LOWER_ICON_MAP[id];
-  if (url) return container(<img src={url} alt={id} className="w-7 h-7 object-contain" draggable={false} />);
+  if (url) return container(<img src={url} alt={id} className="w-full h-full object-contain p-1" draggable={false} />);
   return container(null);
 };
 const YachtEffect = ({ onComplete }) => {
@@ -678,92 +678,97 @@ export default function YachtGame() {
       const lowerSection = CATEGORIES.filter(c => c.section === 'lower');
 
       const BonusRow = () => (
-        <tr className="bg-slate-900/80 font-bold text-lg">
-          <td className="py-2.5 px-3 text-slate-400">Bonus (+35)</td>
-          <td className={`py-2.5 px-3 text-center ${p1Upper >= 63 ? 'text-green-400' : 'text-slate-500'}`}>{p1Upper >= 63 ? '✓' : `${p1Upper}/63`}</td>
-          <td className={`py-2.5 px-3 text-center ${p2Upper >= 63 ? 'text-green-400' : 'text-slate-500'}`}>{p2 ? (p2Upper >= 63 ? '✓' : `${p2Upper}/63`) : '-'}</td>
+        <tr className="bg-slate-900/80 font-bold text-xs sm:text-sm">
+          <td className="py-1 px-2 text-slate-400">Bonus (+35)</td>
+          <td className={`py-1 px-1 text-center ${p1Upper >= 63 ? 'text-green-400' : 'text-slate-500'}`}>{p1Upper >= 63 ? '✓' : `${p1Upper}/63`}</td>
+          <td className={`py-1 px-1 text-center ${p2Upper >= 63 ? 'text-green-400' : 'text-slate-500'}`}>{p2 ? (p2Upper >= 63 ? '✓' : `${p2Upper}/63`) : '-'}</td>
         </tr>
       );
 
-            const ScoreTable = ({ categories, showBonus }) => (
+      const ScoreTable = ({ categories, showBonus }) => (
+        <table className="w-full text-[10px] sm:text-xs">
+          <thead className="sticky top-0 bg-slate-800 z-10">
+            <tr className="bg-slate-900/50 text-slate-400">
+              <th className="py-2 px-2 text-left font-semibold">Category</th>
+              <th className="py-2 px-1 text-center w-10 sm:w-16 font-semibold truncate">{p1.name}</th>
+              <th className="py-2 px-1 text-center w-10 sm:w-16 font-semibold truncate">{p2 ? p2.name : '...'}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-700/50">
+            {categories.map((cat) => (
+              <React.Fragment key={cat.id}>
+                <tr className="hover:bg-slate-700/30 h-8 sm:h-10">
+                  <td className="py-0.5 px-2 font-medium text-slate-300 flex items-center gap-1.5 sm:gap-2 h-full">
+                    {/* 아이콘 크기 대폭 축소 (w-12 -> w-6) */}
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 flex-shrink-0">
+                        <CategoryIcon id={cat.id} section={cat.section} className="w-full h-full" />
+                    </div>
+                    {/* 텍스트 줄바꿈 방지 및 말줄임표 */}
+                    <span className="truncate leading-tight">{cat.label.replace(/\s*\(.*?\)/, '')}</span>
+                  </td>
+                  
+                  {/* Player 1 Score Cell */}
+                  <td 
+                    className={`py-0.5 px-1 text-center text-sm sm:text-lg transition-colors relative 
+                      ${p1.scores[cat.id] !== undefined ? 'text-indigo-300 font-bold' : 'text-slate-500'} 
+                      ${gameData.currentTurn === p1.uid && p1.scores[cat.id] === undefined && hasRolled ? 'cursor-pointer hover:bg-indigo-500/20 bg-indigo-500/5' : ''} 
+                      ${selectedCategory === cat.id && gameData.currentTurn === p1.uid ? '!bg-indigo-600/40 ring-1 ring-inset ring-indigo-400' : ''}`} 
+                    onClick={() => handleScoreClick(cat.id, p1.uid)}
+                  >
+                    {p1.scores[cat.id] !== undefined 
+                      ? p1.scores[cat.id] 
+                      : (gameData.currentTurn === p1.uid && p1.scores[cat.id] === undefined && hasRolled 
+                          ? <span className="text-indigo-500/60 font-semibold text-xs">{calculateScore(gameData.dice, cat.id)}</span> 
+                          : ' ')}
+                  </td>
 
-              <table className="w-full text-base">
-
-                <thead className="sticky top-0 bg-slate-800 z-10">
-
-                  <tr className="bg-slate-900/50 text-slate-400">
-
-                    <th className="py-3 px-3 text-left font-semibold">Category</th>
-
-                    <th className="py-3 px-3 text-center w-20 font-semibold truncate">{p1.name}</th>
-
-                    <th className="py-3 px-3 text-center w-20 font-semibold truncate">{p2 ? p2.name : '...'}</th>
-
-                  </tr>
-
-                </thead>
-
-                <tbody className="divide-y divide-slate-700/50">
-
-                  {categories.map((cat) => (
-
-                    <React.Fragment key={cat.id}>
-
-                      <tr className="hover:bg-slate-700/30">
-
-                        <td className="py-2.5 px-3 font-medium text-slate-300 flex items-center gap-3">
-
-                          <div className="w-12 h-12"><CategoryIcon id={cat.id} section={cat.section} /></div>
-
-                          <span className="text-lg sm:text-xl">{cat.label}</span>
-
-                        </td>
-
-                        <td className={`py-2.5 px-3 text-center text-2xl transition-colors relative ${p1.scores[cat.id] !== undefined ? 'text-indigo-300 font-bold' : 'text-slate-500'} ${gameData.currentTurn === p1.uid && p1.scores[cat.id] === undefined && hasRolled ? 'cursor-pointer hover:bg-indigo-500/20' : ''} ${selectedCategory === cat.id && gameData.currentTurn === p1.uid ? 'bg-indigo-600/30' : ''}`} onClick={() => handleScoreClick(cat.id, p1.uid)}>
-
-                          {p1.scores[cat.id] !== undefined ? p1.scores[cat.id] : (gameData.currentTurn === p1.uid && p1.scores[cat.id] === undefined && hasRolled ? <span className="text-indigo-500/60 font-semibold">{calculateScore(gameData.dice, cat.id)}</span> : ' ')}
-
-                        </td>
-
-                        <td className={`py-2.5 px-3 text-center text-2xl transition-colors relative ${p2?.scores[cat.id] !== undefined ? 'text-pink-400 font-bold' : 'text-slate-500'} ${gameData.currentTurn === p2?.uid && p2?.scores[cat.id] === undefined && hasRolled ? 'cursor-pointer hover:bg-pink-500/20' : ''} ${selectedCategory === cat.id && gameData.currentTurn === p2?.uid ? 'bg-pink-600/30' : ''}`} onClick={() => handleScoreClick(cat.id, p2.uid)}>
-
-                          {p2?.scores[cat.id] !== undefined ? p2?.scores[cat.id] : (gameData.currentTurn === p2?.uid && p2?.scores[cat.id] === undefined && hasRolled ? <span className="text-pink-500/60 font-semibold">{calculateScore(gameData.dice, cat.id)}</span> : ' ')}
-
-                        </td>
-
-                      </tr>
-
-                    </React.Fragment>
-
-                  ))}
-
-                  {showBonus && <BonusRow />}
-
-                </tbody>
-
-              </table>
-
-            );
+                  {/* Player 2 Score Cell */}
+                  <td 
+                    className={`py-0.5 px-1 text-center text-sm sm:text-lg transition-colors relative 
+                      ${p2?.scores[cat.id] !== undefined ? 'text-pink-400 font-bold' : 'text-slate-500'} 
+                      ${gameData.currentTurn === p2?.uid && p2?.scores[cat.id] === undefined && hasRolled ? 'cursor-pointer hover:bg-pink-500/20 bg-pink-500/5' : ''} 
+                      ${selectedCategory === cat.id && gameData.currentTurn === p2?.uid ? '!bg-pink-600/40 ring-1 ring-inset ring-pink-400' : ''}`} 
+                    onClick={() => handleScoreClick(cat.id, p2.uid)}
+                  >
+                    {p2?.scores[cat.id] !== undefined 
+                      ? p2?.scores[cat.id] 
+                      : (gameData.currentTurn === p2?.uid && p2?.scores[cat.id] === undefined && hasRolled 
+                          ? <span className="text-pink-500/60 font-semibold text-xs">{calculateScore(gameData.dice, cat.id)}</span> 
+                          : ' ')}
+                  </td>
+                </tr>
+              </React.Fragment>
+            ))}
+            {showBonus && <BonusRow />}
+          </tbody>
+        </table>
+      );
 
       return (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden flex flex-col h-full">
-          <div className="p-3 bg-slate-800/50 border-b border-slate-700 flex-shrink-0 flex justify-between items-center">
-            <h3 className="font-bold flex items-center gap-2 text-base"><Trophy className="w-5 h-5 text-yellow-500" /> Score</h3>
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="text-right">
-                <div className="text-sm font-medium text-indigo-400 truncate">{p1.name}</div>
-                <div className="text-lg font-bold text-white">{p1Score}</div>
+        <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden flex flex-col h-full shadow-inner">
+          {/* Header height reduced */}
+          <div className="p-2 bg-slate-800/50 border-b border-slate-700 flex-shrink-0 flex justify-between items-center min-h-[40px]">
+            <h3 className="font-bold flex items-center gap-2 text-sm text-slate-300"><Trophy className="w-4 h-4 text-yellow-500" /> Score</h3>
+            <div className="flex items-center gap-3">
+              <div className="text-right flex items-center gap-2">
+                <div className="text-xs font-medium text-indigo-400 truncate max-w-[60px]">{p1.name}</div>
+                <div className="text-base font-bold text-white">{p1Score}</div>
               </div>
-              <div className="w-px h-6 bg-slate-600"></div>
-              <div className="text-right">
-                <div className="text-sm font-medium text-pink-400 truncate">{p2 ? p2.name : '...'}</div>
-                <div className="text-lg font-bold text-white">{p2Score}</div>
+              <div className="w-px h-4 bg-slate-600"></div>
+              <div className="text-right flex items-center gap-2">
+                <div className="text-xs font-medium text-pink-400 truncate max-w-[60px]">{p2 ? p2.name : '...'}</div>
+                <div className="text-base font-bold text-white">{p2Score}</div>
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-x-3 p-2 overflow-y-auto">
-            <ScoreTable categories={upperSection} showBonus={true} />
-            <ScoreTable categories={lowerSection} />
+          {/* 패딩 축소 (gap-x-3 -> gap-x-0.5, p-2 -> p-0.5) */}
+          <div className="grid grid-cols-2 gap-x-0.5 p-0.5 overflow-y-auto bg-slate-900/30">
+            <div className="border-r border-slate-700/50 pr-0.5">
+               <ScoreTable categories={upperSection} showBonus={true} />
+            </div>
+            <div className="pl-0.5">
+               <ScoreTable categories={lowerSection} />
+            </div>
           </div>
         </div>
       );
