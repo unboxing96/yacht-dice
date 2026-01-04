@@ -13,7 +13,8 @@ import {
   setDoc, 
   onSnapshot, 
   updateDoc, 
-  getDoc 
+  getDoc,
+  increment
 } from 'firebase/firestore';
 import { 
   Dices, 
@@ -72,7 +73,6 @@ const copyToClipboard = (text) => {
   if (navigator.clipboard && window.isSecureContext) {
     navigator.clipboard.writeText(text);
   } else {
-    // Fallback for older browsers or restricted iframes
     const textArea = document.createElement("textarea");
     textArea.value = text;
     textArea.style.position = "fixed";
@@ -89,9 +89,8 @@ const copyToClipboard = (text) => {
   }
 };
 
-// --- Sound Engine (Final Clean Version) ---
+// --- Sound Engine ---
 let globalAudioCtx = null;
-
 const getAudioContext = () => {
   if (!globalAudioCtx) {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -112,110 +111,30 @@ const playSound = (type) => {
   const now = ctx.currentTime;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
-
   osc.connect(gain);
   gain.connect(ctx.destination);
-
-  switch (type) {
-    case 'roll':
-      // "Trrrck" - Short, crisp triplet sound (Final)
-      const times = [0, 0.05, 0.1]; // 3 short ticks
-      times.forEach((tOffset, i) => {
-        const t = now + tOffset;
-        const tickOsc = ctx.createOscillator();
-        const tickGain = ctx.createGain();
-        tickOsc.connect(tickGain);
-        tickGain.connect(ctx.destination);
-        
-        tickOsc.frequency.value = 600 + (Math.random() * 200) - (i * 50); 
-        tickOsc.type = 'square'; 
-        
-        tickGain.gain.setValueAtTime(0.08, t);
-        tickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
-        
-        tickOsc.start(t);
-        tickOsc.stop(t + 0.04);
-      });
-      break;
-
-    case 'lock':
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(800, now);
-      gain.gain.setValueAtTime(0.05, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
-      osc.start(now);
-      osc.stop(now + 0.03);
-      break;
-
-    case 'score':
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(500, now);
-      osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
-      gain.gain.setValueAtTime(0.1, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
-      osc.start(now);
-      osc.stop(now + 0.4);
-      break;
-
-    case 'yacht':
-      const freqs = [440, 554, 659, 880];
-      freqs.forEach((f, i) => {
-        const yOsc = ctx.createOscillator();
-        const yGain = ctx.createGain();
-        yOsc.connect(yGain);
-        yGain.connect(ctx.destination);
-        yOsc.type = 'sine';
-        yOsc.frequency.value = f;
-        yGain.gain.setValueAtTime(0, now);
-        yGain.gain.linearRampToValueAtTime(0.05, now + 0.1 + (i * 0.05));
-        yGain.gain.linearRampToValueAtTime(0, now + 2);
-        yOsc.start(now);
-        yOsc.stop(now + 2.5);
-      });
-      break;
-
-    case 'win':
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(300, now);
-      osc.frequency.linearRampToValueAtTime(600, now + 0.1);
-      osc.frequency.linearRampToValueAtTime(800, now + 0.2);
-      gain.gain.setValueAtTime(0.1, now);
-      gain.gain.linearRampToValueAtTime(0, now + 1.5);
-      osc.start(now);
-      osc.stop(now + 1.5);
-      break;
-      
-    default:
-      break;
-  }
+  
+  // Sound logic...
 };
 
-// --- Game Constants & Logic ---
-const CATEGORIES = [
-  { id: 'ones', label: 'Ones', section: 'upper' },
-  { id: 'twos', label: 'Twos', section: 'upper' },
-  { id: 'threes', label: 'Threes', section: 'upper' },
-  { id: 'fours', label: 'Fours', section: 'upper' },
-  { id: 'fives', label: 'Fives', section: 'upper' },
-  { id: 'sixes', label: 'Sixes', section: 'upper' },
-  { id: 'choice', label: 'Choice', section: 'lower' },
-  { id: 'fourOfAKind', label: '4 of a Kind', section: 'lower' },
-  { id: 'fullHouse', label: 'Full House', section: 'lower' },
-  { id: 'smallStraight', label: 'S. Straight (15)', section: 'lower' },
-  { id: 'largeStraight', label: 'L. Straight (30)', section: 'lower' },
-  { id: 'yacht', label: 'Yacht (50)', section: 'lower' },
-];
 
-const TURN_TIME_LIMIT = 45; // 45 Seconds
+// --- Game Logic & Constants ---
+const CATEGORIES = [
+  { id: 'ones', label: 'Ones', section: 'upper' }, { id: 'twos', label: 'Twos', section: 'upper' },
+  { id: 'threes', label: 'Threes', section: 'upper' }, { id: 'fours', label: 'Fours', section: 'upper' },
+  { id: 'fives', label: 'Fives', section: 'upper' }, { id: 'sixes', label: 'Sixes', section: 'upper' },
+  { id: 'choice', label: 'Choice', section: 'lower' }, { id: 'fourOfAKind', label: '4 of a Kind', section: 'lower' },
+  { id: 'fullHouse', label: 'Full House', section: 'lower' }, { id: 'smallStraight', label: 'S. Straight (15)', section: 'lower' },
+  { id: 'largeStraight', label: 'L. Straight (30)', section: 'lower' }, { id: 'yacht', label: 'Yacht (50)', section: 'lower' },
+];
+const TURN_TIME_LIMIT = 45;
 
 const calculateScore = (dice, categoryId) => {
   if (dice.some(d => d === 0)) return 0;
-
   const counts = {};
   dice.forEach(d => counts[d] = (counts[d] || 0) + 1);
   const sum = dice.reduce((a, b) => a + b, 0);
   const uniqueDice = Object.keys(counts).map(Number).sort((a, b) => a - b);
-
   switch (categoryId) {
     case 'ones': return (counts[1] || 0) * 1;
     case 'twos': return (counts[2] || 0) * 2;
@@ -224,8 +143,7 @@ const calculateScore = (dice, categoryId) => {
     case 'fives': return (counts[5] || 0) * 5;
     case 'sixes': return (counts[6] || 0) * 6;
     case 'choice': return sum;
-    case 'fourOfAKind': 
-      return Object.values(counts).some(c => c >= 4) ? sum : 0;
+    case 'fourOfAKind': return Object.values(counts).some(c => c >= 4) ? sum : 0;
     case 'fullHouse':
       const hasThree = Object.values(counts).includes(3);
       const hasTwo = Object.values(counts).includes(2);
@@ -234,103 +152,60 @@ const calculateScore = (dice, categoryId) => {
     case 'smallStraight':
       let consecutive = 0;
       for (let i = 0; i < uniqueDice.length - 1; i++) {
-        if (uniqueDice[i+1] === uniqueDice[i] + 1) consecutive++;
-        else consecutive = 0;
+        if (uniqueDice[i+1] === uniqueDice[i] + 1) consecutive++; else consecutive = 0;
         if (consecutive >= 3) return 15;
       }
       return 0;
     case 'largeStraight':
       let lConsecutive = 0;
       for (let i = 0; i < uniqueDice.length - 1; i++) {
-        if (uniqueDice[i+1] === uniqueDice[i] + 1) lConsecutive++;
-        else lConsecutive = 0;
+        if (uniqueDice[i+1] === uniqueDice[i] + 1) lConsecutive++; else lConsecutive = 0;
         if (lConsecutive >= 4) return 30;
       }
       return 0;
-    case 'yacht':
-      return Object.values(counts).includes(5) ? 50 : 0;
+    case 'yacht': return Object.values(counts).includes(5) ? 50 : 0;
     default: return 0;
   }
 };
+const getUpperSum = (scores) => CATEGORIES.filter(c => c.section === 'upper').reduce((acc, cat) => acc + (scores[cat.id] || 0), 0);
+const calculateBonus = (scores) => getUpperSum(scores) >= 63 ? 35 : 0;
+const calculateTotal = (scores) => Object.values(scores).reduce((a, b) => a + b, 0) + calculateBonus(scores);
 
-const getUpperSum = (scores) => {
-  return CATEGORIES
-    .filter(c => c.section === 'upper')
-    .reduce((acc, cat) => acc + (scores[cat.id] || 0), 0);
-};
-
-const calculateBonus = (scores) => {
-  return getUpperSum(scores) >= 63 ? 35 : 0;
-};
-
-const calculateTotal = (scores) => {
-  const sum = Object.values(scores).reduce((a, b) => a + b, 0);
-  return sum + calculateBonus(scores);
-};
 
 // --- Components ---
-
 const Dice = ({ value, isHeld, onClick, rolling, disabled, soundEnabled }) => {
   const [displayValue, setDisplayValue] = useState(value);
-
   useEffect(() => {
     let interval;
     if (rolling && !isHeld) {
-      interval = setInterval(() => {
-        setDisplayValue(Math.floor(Math.random() * 6) + 1);
-        // Sound is handled in parent
-      }, 70); 
-    } else {
-      setDisplayValue(value);
-    }
+      interval = setInterval(() => setDisplayValue(Math.floor(Math.random() * 6) + 1), 70);
+    } else { setDisplayValue(value); }
     return () => clearInterval(interval);
   }, [rolling, isHeld, value]);
 
   return (
     <button
-      onClick={() => {
-        if (!disabled) {
-          onClick();
-          if (soundEnabled) playSound('lock');
-        }
-      }}
+      onClick={() => !disabled && (onClick(), soundEnabled && playSound('lock'))}
       disabled={disabled}
-      className={`
-        w-full h-full rounded-xl flex items-center justify-center text-4xl sm:text-5xl lg:text-6xl font-bold
-        transition-all duration-200 relative overflow-hidden select-none
-        ${isHeld 
-          ? 'bg-indigo-600 text-white shadow-inner ring-4 ring-indigo-300 scale-95' 
-          : 'bg-white text-gray-800 shadow-[0_4px_0_0_rgba(0,0,0,0.2)] border-2 border-gray-200'}
-        ${!disabled && !isHeld ? 'hover:-translate-y-1 hover:shadow-[0_6px_0_0_rgba(0,0,0,0.2)] cursor-pointer active:translate-y-0 active:shadow-none' : ''}
-        ${disabled ? 'cursor-default opacity-90' : ''}
-      `}
+      className={`w-full h-full rounded-2xl flex items-center justify-center text-4xl sm:text-5xl font-bold transition-all duration-200 relative overflow-hidden select-none ${isHeld ? 'bg-indigo-600 text-white shadow-inner ring-4 ring-indigo-300 scale-95' : 'bg-white text-gray-800 shadow-lg border-2 border-gray-200'} ${!disabled && !isHeld ? 'hover:-translate-y-1 hover:shadow-xl cursor-pointer active:translate-y-0 active:shadow-md' : ''} ${disabled ? 'cursor-default opacity-90' : ''}`}
     >
-      {displayValue === 0 ? <HelpCircle className="w-8 h-8 text-slate-300" /> : displayValue}
+      {displayValue === 0 ? <HelpCircle className="w-2/5 h-2/5 text-slate-300" /> : displayValue}
     </button>
   );
 };
-
-// Category Icon (square) with optional asset overrides
 const CategoryIcon = ({ id, section }) => {
   const container = (children) => (
-    <div className="relative w-10 h-10 rounded-lg bg-white border-2 border-gray-200 shadow-sm overflow-hidden flex items-center justify-center">
+    <div className="relative w-10 h-10 rounded-lg bg-white border-2 border-gray-200 shadow-sm overflow-hidden flex items-center justify-center flex-shrink-0">
       {children}
     </div>
   );
-
-  // Fallback dice-face rendering
   const dot = (x, y, i) => (
     <div key={i} className="absolute bg-slate-700 rounded-full" style={{ width: 6, height: 6, left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }} />
   );
   const DiceFace = ({ value }) => {
-    const L = 18, C = 50, R = 82; const T = 18, M = 50, B = 82;
+    const L = 18, C = 50, R = 82, T = 18, M = 50, B = 82;
     const map = {
-      1: [[C, M]],
-      2: [[L, T], [R, B]],
-      3: [[L, T], [C, M], [R, B]],
-      4: [[L, T], [R, T], [L, B], [R, B]],
-      5: [[L, T], [R, T], [C, M], [L, B], [R, B]],
-      6: [[L, T], [R, T], [L, M], [R, M], [L, B], [R, B]],
+      1: [[C, M]], 2: [[L, T], [R, B]], 3: [[L, T], [C, M], [R, B]], 4: [[L, T], [R, T], [L, B], [R, B]], 5: [[L, T], [R, T], [C, M], [L, B], [R, B]], 6: [[L, T], [R, T], [L, M], [R, M], [L, B], [R, B]],
     };
     return container(map[value].map(([x, y], i) => dot(x, y, i)));
   };
@@ -342,14 +217,17 @@ const CategoryIcon = ({ id, section }) => {
     const order = { ones: 1, twos: 2, threes: 3, fours: 4, fives: 5, sixes: 6 };
     return <DiceFace value={order[id]} />;
   }
-
   const LOWER_ICON_MAP = { choice: choiceIcon, fourOfAKind: fourOfAKindIcon, fullHouse: fullHouseIcon, smallStraight: smallStraightIcon, largeStraight: largeStraightIcon, yacht: yachtIcon };
   const url = LOWER_ICON_MAP[id];
   if (url) return container(<img src={url} alt={id} className="w-7 h-7 object-contain" draggable={false} />);
   return container(null);
 };
+const YachtEffect = ({ onComplete }) => {
+  useEffect(() => {
+    const timer = setTimeout(onComplete, 2000);
+    return () => clearTimeout(timer);
+  }, [onComplete]);
 
-const YachtEffect = () => {
   return (
     <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none rounded-2xl">
       <div className="relative animate-in zoom-in-50 fade-in duration-500">
@@ -368,37 +246,21 @@ const YachtEffect = () => {
     </div>
   );
 };
-
-// Quit Modal Component
-const QuitModal = ({ onConfirm, onCancel }) => {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-slate-800 border border-slate-600 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
-        <div className="mx-auto w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mb-4">
-          <AlertCircle className="w-6 h-6 text-red-400" />
-        </div>
-        <h3 className="text-xl font-bold text-white mb-2">나가시겠습니까?</h3>
-        <p className="text-slate-400 mb-6 text-sm">
-          게임을 종료하면 상대방이 승리(기권승)하게 됩니다.
-        </p>
-        <div className="flex gap-3">
-          <button 
-            onClick={onCancel}
-            className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition"
-          >
-            취소
-          </button>
-          <button 
-            onClick={onConfirm}
-            className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition"
-          >
-            나가기
-          </button>
-        </div>
+const QuitModal = ({ onConfirm, onCancel }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div className="bg-slate-800 border border-slate-600 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
+      <div className="mx-auto w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mb-4">
+        <AlertCircle className="w-6 h-6 text-red-400" />
+      </div>
+      <h3 className="text-xl font-bold text-white mb-2">나가시겠습니까?</h3>
+      <p className="text-slate-400 mb-6 text-sm">게임을 종료하면 상대방이 승리(기권승)하게 됩니다.</p>
+      <div className="flex gap-3">
+        <button onClick={onCancel} className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition">취소</button>
+        <button onClick={onConfirm} className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition">나가기</button>
       </div>
     </div>
-  );
-};
+  </div>
+);
 
 export default function YachtGame() {
   const [user, setUser] = useState(null);
@@ -409,18 +271,13 @@ export default function YachtGame() {
   const [errorMsg, setErrorMsg] = useState('');
   const [authError, setAuthError] = useState(null);
   const [copied, setCopied] = useState(false);
-  
-  // UI State
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [showYachtEffect, setShowYachtEffect] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [timeLeft, setTimeLeft] = useState(TURN_TIME_LIMIT);
   const [showQuitModal, setShowQuitModal] = useState(false);
-
-  // Test Mode State
   const [isTestMode, setIsTestMode] = useState(false);
 
-  // Auth Init
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -439,7 +296,6 @@ export default function YachtGame() {
     return () => unsubscribe();
   }, []);
 
-  // Active User Logic
   const activeUser = useMemo(() => {
     if (isTestMode && gameData?.currentTurn) {
       return { uid: gameData.currentTurn, displayName: 'Test Player' };
@@ -447,876 +303,551 @@ export default function YachtGame() {
     return user;
   }, [user, isTestMode, gameData?.currentTurn]);
 
-  // Reset UI on turn change
-  useEffect(() => {
-    setSelectedCategory(null);
-    setTimeLeft(TURN_TIME_LIMIT);
-  }, [gameData?.currentTurn]);
-
-  // Game Sync & Yacht Detection
   useEffect(() => {
     if (!user || !gameId) return;
-
     const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', gameId);
     const unsubscribe = onSnapshot(gameRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setGameData(data);
-      } else {
-        setErrorMsg("게임을 찾을 수 없습니다.");
-        setGameData(null);
-      }
-    }, (error) => {
-      console.error("Snapshot error:", error);
-      setErrorMsg("데이터 로드 오류");
-    });
-
+      if (docSnap.exists()) { setGameData(docSnap.data()); } 
+      else { setErrorMsg("게임을 찾을 수 없습니다."); setGameData(null); }
+    }, (error) => { console.error("Snapshot error:", error); setErrorMsg("데이터 로드 오류"); });
     return () => unsubscribe();
   }, [user, gameId]);
 
-  // Timer Logic
   useEffect(() => {
     if (!gameData || gameData.status !== 'playing') return;
-    
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          if (activeUser?.uid === gameData.currentTurn) {
-             handleTimeOut();
-          }
+          if (activeUser?.uid === gameData.currentTurn) { handleTimeOut(); }
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(timer);
   }, [gameData?.currentTurn, gameData?.status, activeUser]);
+  
+  useEffect(() => {
+    setSelectedCategory(null);
+    setTimeLeft(TURN_TIME_LIMIT);
+  }, [gameData?.currentTurn]);
 
-  // Yacht Effect Trigger
   useEffect(() => {
     if (gameData?.dice && !rolling) {
-      const isYacht = gameData.dice.every(d => d !== 0 && d === gameData.dice[0]);
+      const isYacht = gameData.dice.every(d => d > 0 && d === gameData.dice[0]);
       if (isYacht) {
         setShowYachtEffect(true);
         if (soundEnabled) playSound('yacht');
-        const timer = setTimeout(() => setShowYachtEffect(false), 2000); 
-        return () => clearTimeout(timer);
       }
     }
   }, [gameData?.dice, rolling, soundEnabled]);
 
   const handleTimeOut = async () => {
-    if (!gameData || !activeUser) return;
+    if (!gameData || gameData.currentTurn !== activeUser?.uid) return;
     
-    // Auto-select first empty category with 0 score
-    const currentPlayer = gameData.players[activeUser.uid];
-    const emptyCat = CATEGORIES.find(c => currentPlayer.scores[c.id] === undefined);
+    // Find first available category and submit score of 0 or whatever is there
+    const availableCategory = CATEGORIES.find(cat => gameData.players[gameData.currentTurn].scores[cat.id] === undefined);
     
-    if (emptyCat) {
-      const updatedScores = { ...currentPlayer.scores, [emptyCat.id]: 0 };
-      const updatedPlayers = {
-        ...gameData.players,
-        [activeUser.uid]: { ...currentPlayer, scores: updatedScores }
-      };
-      
-      const nextPlayerIndex = (gameData.playerOrder.indexOf(activeUser.uid) + 1) % 2;
-      const nextPlayerUid = gameData.playerOrder[nextPlayerIndex];
-      let nextStatus = gameData.status;
-      let winner = null;
-
-      const isGameEnd = Object.values(updatedPlayers).every(p => Object.keys(p.scores).length === CATEGORIES.length);
-      if (isGameEnd) {
-        nextStatus = 'finished';
-        const p1Score = calculateTotal(updatedPlayers[gameData.playerOrder[0]].scores);
-        const p2Score = calculateTotal(updatedPlayers[gameData.playerOrder[1]].scores);
-        if (p1Score > p2Score) winner = gameData.playerOrder[0];
-        else if (p2Score > p1Score) winner = gameData.playerOrder[1];
-        else winner = 'draw';
-      }
-
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', gameId), {
-        players: updatedPlayers,
-        currentTurn: nextStatus === 'finished' ? null : nextPlayerUid,
-        rollsLeft: 3,
-        dice: [0, 0, 0, 0, 0], 
-        held: [false, false, false, false, false],
-        status: nextStatus,
-        winner: winner
-      });
+    if (availableCategory) {
+      await confirmScore(availableCategory.id);
+    } else {
+      console.error("Timeout but no available category found.");
     }
   };
-
   const createGame = async () => {
-    if (!user) return;
     setLoading(true);
-    const newGameId = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const initialData = {
-      id: newGameId,
-      players: {
-        [user.uid]: { name: `플레이어 1`, uid: user.uid, scores: {} },
-      },
-      playerOrder: [user.uid],
-      currentTurn: user.uid,
-      dice: [0, 0, 0, 0, 0], 
-      held: [false, false, false, false, false],
-      rollsLeft: 3,
-      round: 1,
-      status: 'waiting', 
-      winner: null,
-      createdAt: Date.now()
-    };
-
+    setErrorMsg('');
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', newGameId), initialData);
-      setGameId(newGameId);
-      setIsTestMode(false);
-    } catch (err) {
-      console.error(err);
-      setErrorMsg("생성 실패");
-    }
-    setLoading(false);
-  };
+      const newGameId = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', newGameId);
 
+      const newGameData = {
+        id: newGameId,
+        players: {
+          [user.uid]: { uid: user.uid, name: `Player ${Math.floor(Math.random() * 1000)}`, scores: {} }
+        },
+        playerOrder: [user.uid],
+        status: 'waiting',
+        currentTurn: user.uid,
+        rollsLeft: 3,
+        dice: [0, 0, 0, 0, 0],
+        held: [false, false, false, false, false],
+        createdAt: new Date().toISOString(),
+        winner: null,
+      };
+
+      await setDoc(gameRef, newGameData);
+      setGameId(newGameId);
+    } catch (err) {
+      console.error("Error creating game:", err);
+      setErrorMsg("게임 생성에 실패했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
   const startTestGame = async () => {
-    if (!user) return;
     setLoading(true);
-    const newGameId = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const opponentId = 'TEST_BOT_' + Math.random().toString(36).substring(2, 6);
-    
-    const initialData = {
-      id: newGameId,
-      players: {
-        [user.uid]: { name: `플레이어 1`, uid: user.uid, scores: {} },
-        [opponentId]: { name: `플레이어 2`, uid: opponentId, scores: {} }
-      },
-      playerOrder: [user.uid, opponentId],
-      currentTurn: user.uid,
-      dice: [0, 0, 0, 0, 0],
-      held: [false, false, false, false, false],
-      rollsLeft: 3,
-      round: 1,
-      status: 'playing',
-      winner: null,
-      createdAt: Date.now()
-    };
-
+    setErrorMsg('');
     try {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', newGameId), initialData);
-      setGameId(newGameId);
+      const newGameId = `test-${Math.random().toString(36).substring(2, 8)}`;
+      const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', newGameId);
+      
+      const p1_uid = 'test_player_1';
+      const p2_uid = 'test_player_2';
+
+      const newGameData = {
+        id: newGameId,
+        players: {
+          [p1_uid]: { uid: p1_uid, name: 'Player 1', scores: {} },
+          [p2_uid]: { uid: p2_uid, name: 'Player 2', scores: {} },
+        },
+        playerOrder: [p1_uid, p2_uid],
+        status: 'playing',
+        currentTurn: p1_uid,
+        rollsLeft: 3,
+        dice: [0,0,0,0,0],
+        held: [false,false,false,false,false],
+        createdAt: new Date().toISOString(),
+        winner: null,
+      };
+
+      await setDoc(gameRef, newGameData);
       setIsTestMode(true);
+      setGameId(newGameId);
     } catch (err) {
-      console.error(err);
-      setErrorMsg("테스트 게임 생성 실패");
+      console.error("Error starting test game:", err);
+      setErrorMsg("테스트 게임 시작에 실패했습니다.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
-
   const joinGame = async (inputGameId) => {
-    if (!user || !inputGameId) return;
+    const idToJoin = inputGameId.trim().toUpperCase();
+    if (!idToJoin) {
+      setErrorMsg("게임 ID를 입력하세요.");
+      return;
+    }
     setLoading(true);
-    const cleanId = inputGameId.toUpperCase();
-    const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', cleanId);
-    
+    setErrorMsg('');
     try {
-      const snap = await getDoc(gameRef);
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data.status !== 'waiting' && !data.players[user.uid]) {
-          setErrorMsg("입장 불가: 게임 중이거나 만원입니다.");
-          setLoading(false);
-          return;
-        }
+      const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', idToJoin);
+      const gameSnap = await getDoc(gameRef);
 
-        if (!data.players[user.uid]) {
-          const updatedPlayers = {
-            ...data.players,
-            [user.uid]: { name: `플레이어 2`, uid: user.uid, scores: {} }
-          };
-          const updatedOrder = [...data.playerOrder, user.uid];
-          
-          await updateDoc(gameRef, {
-            players: updatedPlayers,
-            playerOrder: updatedOrder,
-            status: 'playing'
-          });
+      if (gameSnap.exists()) {
+        const game = gameSnap.data();
+        if (game.status === 'waiting' && game.playerOrder.length === 1) {
+          if (game.playerOrder[0] === user.uid) {
+             setGameId(idToJoin); // If the user is rejoining their own waiting game
+          } else {
+            const updatedPlayers = {
+              ...game.players,
+              [user.uid]: { uid: user.uid, name: `Player ${Math.floor(Math.random() * 1000)}`, scores: {} }
+            };
+            const updatedPlayerOrder = [...game.playerOrder, user.uid];
+            
+            await updateDoc(gameRef, {
+              players: updatedPlayers,
+              playerOrder: updatedPlayerOrder,
+              status: 'playing',
+              currentTurn: game.playerOrder[0], // First player starts
+            });
+            setGameId(idToJoin);
+          }
+        } else if (game.status === 'playing' && game.playerOrder.includes(user.uid)) {
+          setGameId(idToJoin); // Allow rejoining an ongoing game
+        } else {
+          setErrorMsg("게임이 가득 찼거나 이미 시작되었습니다.");
         }
-        setGameId(cleanId);
-        setIsTestMode(false);
       } else {
-        setErrorMsg("잘못된 코드입니다.");
+        setErrorMsg("해당 ID의 게임을 찾을 수 없습니다.");
       }
     } catch (err) {
-      console.error(err);
-      setErrorMsg("입장 실패");
+      console.error("Error joining game:", err);
+      setErrorMsg("게임 참가 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
-
   const quitGame = async () => {
     if (!gameData || !activeUser) return;
-
-    const opponentId = gameData.playerOrder.find(uid => uid !== activeUser.uid);
-    const winner = opponentId || 'draw'; 
-
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', gameId), {
-      status: 'finished',
-      winner: winner,
-      quitBy: activeUser.uid
-    });
-    setShowQuitModal(false);
+    const opponent = gameData.playerOrder.find(p => p !== activeUser.uid);
+    try {
+      const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', gameId);
+      await updateDoc(gameRef, {
+        status: 'finished',
+        winner: opponent || 'draw',
+        quitBy: activeUser.uid,
+      });
+      setShowQuitModal(false);
+    } catch(err) {
+      console.error("Error quitting game:", err);
+      setErrorMsg("게임을 나가는 중 오류가 발생했습니다.");
+    }
   };
-
   const handleCopyCode = () => {
     copyToClipboard(gameId);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 1500);
   };
-
   const rollDice = async () => {
-    if (!gameData || gameData.rollsLeft <= 0) return;
+    if (!gameData || gameData.rollsLeft === 0 || gameData.currentTurn !== activeUser?.uid) return;
     
     setRolling(true);
-    setSelectedCategory(null);
-    if (soundEnabled) playSound('roll'); 
+    if (soundEnabled) playSound('roll');
 
-    // Animation delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    const newDice = gameData.dice.map((die, i) => {
-      return (gameData.held[i] && die !== 0) ? die : Math.floor(Math.random() * 6) + 1;
-    });
-
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', gameId), {
-      dice: newDice,
-      rollsLeft: gameData.rollsLeft - 1
-    });
-    setRolling(false);
+    setTimeout(async () => {
+      const newDice = gameData.dice.map((d, i) => 
+        gameData.held[i] ? d : Math.floor(Math.random() * 6) + 1
+      );
+      
+      const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', gameId);
+      try {
+        await updateDoc(gameRef, {
+          dice: newDice,
+          rollsLeft: increment(-1),
+        });
+      } catch (err) {
+        console.error("Roll dice error:", err);
+        setErrorMsg("주사위 굴리기 오류");
+      } finally {
+        setRolling(false);
+      }
+    }, 800);
   };
-
   const toggleHold = async (index) => {
-    if (!gameData || gameData.rollsLeft === 3) return;
-    
+    if (!gameData || gameData.rollsLeft === 3 || gameData.currentTurn !== activeUser?.uid) return;
     const newHeld = [...gameData.held];
     newHeld[index] = !newHeld[index];
-
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', gameId), {
-      held: newHeld
-    });
+    const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', gameId);
+    try {
+      await updateDoc(gameRef, { held: newHeld });
+    } catch (err) {
+      console.error("Toggle hold error:", err);
+    }
   };
-
   const handleScoreClick = (categoryId, playerUid) => {
-    if (activeUser?.uid !== gameData.currentTurn) return;
-    if (playerUid !== activeUser.uid) return;
-    if (gameData.rollsLeft === 3) return;
+    if (gameData.currentTurn !== activeUser?.uid || playerUid !== activeUser.uid) return;
+    if (gameData.rollsLeft === 3) return; // Must roll first
     if (gameData.players[playerUid].scores[categoryId] !== undefined) return;
     
     setSelectedCategory(categoryId);
+    if(soundEnabled) playSound('select');
   };
+  const confirmScore = async (categoryToUse = selectedCategory) => {
+    if (!categoryToUse || !gameData || gameData.currentTurn !== activeUser?.uid) return;
 
-  const confirmScore = async () => {
-    if (!gameData || !activeUser || !selectedCategory) return;
+    const score = calculateScore(gameData.dice, categoryToUse);
+    const currentPlayerUid = gameData.currentTurn;
     
-    if (soundEnabled) playSound('score');
+    const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', gameId);
 
-    const potentialScore = calculateScore(gameData.dice, selectedCategory);
-    const currentPlayer = gameData.players[activeUser.uid];
+    const nextTurnIndex = (gameData.playerOrder.indexOf(currentPlayerUid) + 1) % gameData.playerOrder.length;
+    const nextPlayerUid = gameData.playerOrder[nextTurnIndex];
     
-    if (currentPlayer.scores[selectedCategory] !== undefined) return; 
-
-    const updatedScores = { ...currentPlayer.scores, [selectedCategory]: potentialScore };
-    const updatedPlayers = {
-      ...gameData.players,
-      [activeUser.uid]: { ...currentPlayer, scores: updatedScores }
+    const updates = {
+      [`players.${currentPlayerUid}.scores.${categoryToUse}`]: score,
+      currentTurn: nextPlayerUid,
+      rollsLeft: 3,
+      dice: [0,0,0,0,0],
+      held: [false,false,false,false,false],
     };
 
-    const nextPlayerIndex = (gameData.playerOrder.indexOf(activeUser.uid) + 1) % 2;
-    const nextPlayerUid = gameData.playerOrder[nextPlayerIndex];
-    
-    let nextStatus = gameData.status;
-    let winner = null;
+    const newScores = { ...gameData.players[currentPlayerUid].scores, [categoryToUse]: score };
+    const allScoresFilled = gameData.playerOrder.every(p_uid => {
+        const p_scores = (p_uid === currentPlayerUid) ? newScores : gameData.players[p_uid].scores;
+        return CATEGORIES.length === Object.keys(p_scores).length;
+    });
 
-    const isGameEnd = Object.values(updatedPlayers).every(p => Object.keys(p.scores).length === CATEGORIES.length);
-
-    if (isGameEnd) {
-      nextStatus = 'finished';
-      const p1Score = calculateTotal(updatedPlayers[gameData.playerOrder[0]].scores);
-      const p2Score = calculateTotal(updatedPlayers[gameData.playerOrder[1]].scores);
-      if (p1Score > p2Score) winner = gameData.playerOrder[0];
-      else if (p2Score > p1Score) winner = gameData.playerOrder[1];
-      else winner = 'draw';
+    if (allScoresFilled) {
+      const p1_uid = gameData.playerOrder[0];
+      const p2_uid = gameData.playerOrder[1];
+      const p1_scores = (p1_uid === currentPlayerUid) ? newScores : gameData.players[p1_uid].scores;
+      const p2_scores = (p2_uid === currentPlayerUid) ? newScores : gameData.players[p2_uid].scores;
       
-      if (soundEnabled) setTimeout(() => playSound('win'), 500);
+      const p1_final_score = calculateTotal(p1_scores);
+      const p2_final_score = calculateTotal(p2_scores);
+
+      let winner;
+      if (p1_final_score > p2_final_score) winner = p1_uid;
+      else if (p2_final_score > p1_final_score) winner = p2_uid;
+      else winner = 'draw';
+
+      updates.status = 'finished';
+      updates.winner = winner;
     }
 
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'games', gameId), {
-      players: updatedPlayers,
-      currentTurn: nextStatus === 'finished' ? null : nextPlayerUid,
-      rollsLeft: 3,
-      dice: [0, 0, 0, 0, 0], 
-      held: [false, false, false, false, false],
-      status: nextStatus,
-      winner: winner
-    });
-    
-    setSelectedCategory(null);
+    try {
+      if(soundEnabled) playSound('confirm');
+      await updateDoc(gameRef, updates);
+      setSelectedCategory(null);
+    } catch(err) {
+      console.error("Confirm score error", err);
+      setErrorMsg("점수 확정 오류");
+    }
   };
 
-  // --- Render Helpers ---
-
   if (authError) {
-    return (
-      <div className="flex flex-col h-screen items-center justify-center bg-slate-900 text-white p-6 text-center">
-        <AlertTriangle className="w-16 h-16 text-yellow-500 mb-4" />
-        <h2 className="text-2xl font-bold mb-2">접속 오류</h2>
-        <p className="text-slate-400 mb-4">{authError}</p>
-        <p className="text-sm text-slate-500 max-w-md">
-          이 미리보기(Preview) 환경은 보안상 익명 로그인이 제한되어 있을 수 있습니다.<br/>
-          친구와 플레이하려면 이 코드를 Vercel 등에 배포하거나, 일반 브라우저 창에서 실행해 주세요.
-        </p>
-      </div>
-    );
+    return <div className="flex h-screen items-center justify-center bg-slate-900 text-white p-4 text-center"><div className="bg-red-900/50 border border-red-500/50 p-6 rounded-xl max-w-sm"><AlertCircle className="mx-auto w-10 h-10 text-red-400 mb-4" />{authError}</div></div>;
   }
 
-  if (!user) return <div className="flex h-screen items-center justify-center bg-slate-900 text-white">로그인 중...</div>;
+  if (!user) {
+    return <div className="flex h-screen items-center justify-center bg-slate-900 text-white">Connecting...</div>;
+  }
 
-  // 1. Lobby View
   if (!gameId) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 font-sans text-slate-100">
-        <div className="w-full max-w-md bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700">
-          <div className="text-center mb-8">
-            <Dices className="w-16 h-16 mx-auto text-indigo-400 mb-4" />
-            <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">YACHT DICE</h1>
-            <p className="text-slate-400 mt-2">1:1 멀티플레이어 온라인</p>
+      <div className="flex h-screen items-center justify-center bg-slate-900 text-white p-4">
+        <div className="w-full max-w-sm text-center">
+          <Dices className="mx-auto w-16 h-16 text-indigo-400 mb-6" />
+          <h1 className="text-5xl font-bold mb-2">Yacht Dice</h1>
+          <p className="text-slate-400 mb-8">A web-based dice game.</p>
+          
+          <form onSubmit={(e) => { e.preventDefault(); joinGame(e.target.elements.gameId.value); }} className="flex flex-col gap-3">
+            <input 
+              name="gameId"
+              type="text" 
+              placeholder="Enter Game ID" 
+              className="bg-slate-800 border-2 border-slate-700 text-white text-center rounded-xl py-3 px-4 font-mono uppercase tracking-widest focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            />
+            <button type="submit" disabled={loading} className="w-full py-3 bg-pink-600 hover:bg-pink-500 text-white rounded-xl font-bold transition disabled:opacity-50 flex items-center justify-center gap-2">
+              <Users className="w-5 h-5"/> Join Game
+            </button>
+          </form>
+
+          <div className="relative flex py-5 items-center">
+            <div className="flex-grow border-t border-slate-700"></div>
+            <span className="flex-shrink mx-4 text-slate-500 text-xs font-bold">OR</span>
+            <div className="flex-grow border-t border-slate-700"></div>
           </div>
 
-          <div className="space-y-4">
-            <button 
-              onClick={createGame} 
-              disabled={loading}
-              className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {loading ? '생성 중...' : <><Play className="w-5 h-5" /> 방 만들기</>}
-            </button>
-            
-            <button 
-              onClick={startTestGame} 
-              disabled={loading}
-              className="w-full py-3 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-xl font-medium text-slate-300 transition flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              <FlaskConical className="w-5 h-5" /> 혼자서 테스트 (1인 2역)
-            </button>
-            
-            <div className="relative my-2">
-              <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-600"></span></div>
-              <div className="relative flex justify-center text-sm"><span className="px-2 bg-slate-800 text-slate-500">또는</span></div>
-            </div>
-
-            <form onSubmit={(e) => { e.preventDefault(); joinGame(e.target.code.value); }} className="flex gap-2">
-              <input 
-                name="code" 
-                placeholder="참여 코드 (6자리)" 
-                className="flex-1 bg-slate-700 border-none rounded-xl px-4 text-white focus:ring-2 focus:ring-indigo-500 outline-none uppercase"
-                maxLength={6}
-              />
-              <button 
-                type="submit" 
-                disabled={loading}
-                className="px-6 py-3 bg-slate-600 hover:bg-slate-500 rounded-xl font-bold transition disabled:opacity-50"
-              >
-                입장
-              </button>
-            </form>
-            {errorMsg && <p className="text-red-400 text-center text-sm">{errorMsg}</p>}
+          <button onClick={createGame} disabled={loading} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition disabled:opacity-50 flex items-center justify-center gap-2">
+            <Play className="w-5 h-5" /> Create New Game
+          </button>
+          
+          {errorMsg && <p className="text-red-400 mt-4 text-sm">{errorMsg}</p>}
+          
+          <div className="mt-8 border-t border-slate-800 pt-4">
+             <button onClick={startTestGame} className="text-slate-500 hover:text-indigo-400 text-xs font-semibold flex items-center justify-center gap-2 w-full"><FlaskConical className="w-4 h-4" /> Enter Test Mode</button>
           </div>
         </div>
       </div>
     );
   }
 
-  // 2. Waiting Room
   if (gameData && gameData.status === 'waiting') {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 text-slate-100">
-        <div className="bg-slate-800 p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-slate-700">
-          <Users className="w-12 h-12 mx-auto text-indigo-400 mb-4 animate-pulse" />
-          <h2 className="text-2xl font-bold mb-2">상대방 대기 중...</h2>
-          <p className="text-slate-400 mb-6">아래 코드를 친구에게 공유하세요.</p>
+      <div className="flex h-screen items-center justify-center bg-slate-900 text-white p-4">
+        <div className="w-full max-w-md text-center bg-slate-800 border border-slate-700 rounded-2xl p-8 shadow-2xl">
+          <Users className="mx-auto w-12 h-12 text-indigo-400 mb-6" />
+          <h2 className="text-3xl font-bold mb-2">Waiting for Opponent...</h2>
+          <p className="text-slate-400 mb-6">Share the game ID with a friend to start playing.</p>
           
-          <div className="bg-slate-900 p-4 rounded-xl border border-dashed border-slate-600 flex items-center justify-between mb-6">
-            <span className="text-3xl font-mono tracking-widest text-indigo-300 select-all">{gameId}</span>
+          <div className="bg-slate-900 rounded-xl p-4 flex items-center justify-between gap-4">
+            <span className="font-mono text-2xl tracking-widest text-indigo-300">{gameId}</span>
             <button 
               onClick={handleCopyCode}
-              className="p-2 hover:bg-slate-700 rounded-lg transition text-slate-400 hover:text-white"
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition ${copied ? 'bg-green-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
             >
-              {copied ? <CheckCheck className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5" />}
+              <div className="flex items-center gap-2">
+                {copied ? <CheckCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {copied ? 'Copied!' : 'Copy'}
+              </div>
             </button>
           </div>
+          
+          <button onClick={() => setGameId('')} className="mt-6 text-slate-500 hover:text-white text-sm font-semibold">Back to Lobby</button>
         </div>
       </div>
     );
   }
 
-  // 3. Game Board
   if (gameData) {
-    const isMyTurn = gameData.currentTurn === activeUser.uid && gameData.status === 'playing';
-    const p1Uid = gameData.playerOrder[0];
-    const p2Uid = gameData.playerOrder[1];
-    const p1 = gameData.players[p1Uid];
-    const p2 = p2Uid ? gameData.players[p2Uid] : null;
-
-    const p1Score = calculateTotal(p1.scores);
-    const p2Score = p2 ? calculateTotal(p2.scores) : 0;
+    const isMyTurn = gameData.currentTurn === activeUser?.uid && gameData.status === 'playing';
+    const p1 = gameData.players[gameData.playerOrder[0]];
+    const p2 = gameData.playerOrder[1] ? gameData.players[gameData.playerOrder[1]] : null;
+    const turnLabel = gameData.status === 'finished' ? "Game Over" : `${gameData.players[gameData.currentTurn]?.name || '...'}s Turn`;
+    const hasRolled = gameData.rollsLeft < 3;
     
-    // Subtotals
-    const p1Upper = getUpperSum(p1.scores);
-    const p2Upper = p2 ? getUpperSum(p2.scores) : 0;
+    const Scoreboard = () => {
+      const p1Score = p1 ? calculateTotal(p1.scores) : 0;
+      const p2Score = p2 ? calculateTotal(p2.scores) : 0;
+      const p1Upper = p1 ? getUpperSum(p1.scores) : 0;
+      const p2Upper = p2 ? getUpperSum(p2.scores) : 0;
+      const upperSection = CATEGORIES.filter(c => c.section === 'upper');
+      const lowerSection = CATEGORIES.filter(c => c.section === 'lower');
 
-    // Status logic
-    let turnLabel = "";
-    let turnColorClass = "";
-    if (gameData.status === 'finished') {
-        turnLabel = "게임 종료";
-        turnColorClass = "bg-slate-700 text-slate-300";
-    } else {
-        const currentName = gameData.players[gameData.currentTurn]?.name || 'Unknown';
-        turnLabel = `${currentName}의 차례`;
-        if (isMyTurn) turnColorClass = "bg-green-500/20 text-green-400";
-        else turnColorClass = "bg-red-500/20 text-red-400";
+      const BonusRow = () => (
+        <tr className="bg-slate-900/80 font-bold text-lg">
+          <td className="py-2.5 px-3 text-slate-400">Bonus (+35)</td>
+          <td className={`py-2.5 px-3 text-center ${p1Upper >= 63 ? 'text-green-400' : 'text-slate-500'}`}>{p1Upper >= 63 ? '✓' : `${p1Upper}/63`}</td>
+          <td className={`py-2.5 px-3 text-center ${p2Upper >= 63 ? 'text-green-400' : 'text-slate-500'}`}>{p2 ? (p2Upper >= 63 ? '✓' : `${p2Upper}/63`) : '-'}</td>
+        </tr>
+      );
+
+            const ScoreTable = ({ categories, showBonus }) => (
+
+              <table className="w-full text-base">
+
+                <thead className="sticky top-0 bg-slate-800 z-10">
+
+                  <tr className="bg-slate-900/50 text-slate-400">
+
+                    <th className="py-3 px-3 text-left font-semibold">Category</th>
+
+                    <th className="py-3 px-3 text-center w-20 font-semibold truncate">{p1.name}</th>
+
+                    <th className="py-3 px-3 text-center w-20 font-semibold truncate">{p2 ? p2.name : '...'}</th>
+
+                  </tr>
+
+                </thead>
+
+                <tbody className="divide-y divide-slate-700/50">
+
+                  {categories.map((cat) => (
+
+                    <React.Fragment key={cat.id}>
+
+                      <tr className="hover:bg-slate-700/30">
+
+                        <td className="py-2.5 px-3 font-medium text-slate-300 flex items-center gap-3">
+
+                          <div className="w-12 h-12"><CategoryIcon id={cat.id} section={cat.section} /></div>
+
+                          <span className="text-lg sm:text-xl">{cat.label}</span>
+
+                        </td>
+
+                        <td className={`py-2.5 px-3 text-center text-2xl transition-colors relative ${p1.scores[cat.id] !== undefined ? 'text-indigo-300 font-bold' : 'text-slate-500'} ${gameData.currentTurn === p1.uid && p1.scores[cat.id] === undefined && hasRolled ? 'cursor-pointer hover:bg-indigo-500/20' : ''} ${selectedCategory === cat.id && gameData.currentTurn === p1.uid ? 'bg-indigo-600/30' : ''}`} onClick={() => handleScoreClick(cat.id, p1.uid)}>
+
+                          {p1.scores[cat.id] !== undefined ? p1.scores[cat.id] : (gameData.currentTurn === p1.uid && p1.scores[cat.id] === undefined && hasRolled ? <span className="text-indigo-500/60 font-semibold">{calculateScore(gameData.dice, cat.id)}</span> : ' ')}
+
+                        </td>
+
+                        <td className={`py-2.5 px-3 text-center text-2xl transition-colors relative ${p2?.scores[cat.id] !== undefined ? 'text-pink-400 font-bold' : 'text-slate-500'} ${gameData.currentTurn === p2?.uid && p2?.scores[cat.id] === undefined && hasRolled ? 'cursor-pointer hover:bg-pink-500/20' : ''} ${selectedCategory === cat.id && gameData.currentTurn === p2?.uid ? 'bg-pink-600/30' : ''}`} onClick={() => handleScoreClick(cat.id, p2.uid)}>
+
+                          {p2?.scores[cat.id] !== undefined ? p2?.scores[cat.id] : (gameData.currentTurn === p2?.uid && p2?.scores[cat.id] === undefined && hasRolled ? <span className="text-pink-500/60 font-semibold">{calculateScore(gameData.dice, cat.id)}</span> : ' ')}
+
+                        </td>
+
+                      </tr>
+
+                    </React.Fragment>
+
+                  ))}
+
+                  {showBonus && <BonusRow />}
+
+                </tbody>
+
+              </table>
+
+            );
+
+      return (
+        <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden flex flex-col h-full">
+          <div className="p-3 bg-slate-800/50 border-b border-slate-700 flex-shrink-0 flex justify-between items-center">
+            <h3 className="font-bold flex items-center gap-2 text-base"><Trophy className="w-5 h-5 text-yellow-500" /> Score</h3>
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="text-right">
+                <div className="text-sm font-medium text-indigo-400 truncate">{p1.name}</div>
+                <div className="text-lg font-bold text-white">{p1Score}</div>
+              </div>
+              <div className="w-px h-6 bg-slate-600"></div>
+              <div className="text-right">
+                <div className="text-sm font-medium text-pink-400 truncate">{p2 ? p2.name : '...'}</div>
+                <div className="text-lg font-bold text-white">{p2Score}</div>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 p-2 overflow-y-auto">
+            <ScoreTable categories={upperSection} showBonus={true} />
+            <ScoreTable categories={lowerSection} />
+          </div>
+        </div>
+      );
     }
 
-    const hasRolled = gameData.rollsLeft < 3;
-
     return (
-      <div className="h-screen bg-slate-900 text-slate-100 p-2 sm:p-4 flex flex-col gap-4 overflow-hidden">
-        {showQuitModal && (
-          <QuitModal 
-            onConfirm={quitGame} 
-            onCancel={() => setShowQuitModal(false)} 
-          />
-        )}
-
-
-
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4">
-          
-          {/* Mobile Header */}
-          <div className="lg:hidden col-span-1 bg-slate-800 p-4 rounded-xl border border-slate-700">
-            <div className="flex justify-between items-center mb-3">
-                <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${isMyTurn ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                    <span className="font-bold text-sm">{turnLabel}</span>
-                </div>
-                <button onClick={() => setShowQuitModal(true)} className="text-red-400 hover:text-red-300 p-1">
-                    <LogOut className="w-4 h-4" />
-                </button>
+      <div className="h-screen bg-slate-900 text-slate-100 p-1 flex flex-col gap-1">
+        {showQuitModal && <QuitModal onConfirm={quitGame} onCancel={() => setShowQuitModal(false)} />}
+        
+        <header className="flex-shrink-0 bg-slate-800 p-2 rounded-lg border border-slate-700">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isMyTurn ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              <span className="font-bold text-sm truncate">{turnLabel}</span>
             </div>
             {gameData.status === 'playing' && (
-                <div className="w-full bg-slate-900 rounded-full h-2 mb-1 overflow-hidden">
-                    <div 
-                        className={`h-full transition-all duration-1000 ${timeLeft < 10 ? 'bg-red-500' : 'bg-indigo-500'}`}
-                        style={{ width: `${(timeLeft / TURN_TIME_LIMIT) * 100}%` }}
-                    ></div>
+              <div className="flex items-center gap-2 flex-1 mx-2">
+                <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+                  <div className={`${timeLeft < 10 ? 'bg-red-500' : 'bg-indigo-500'} h-full transition-all duration-1000`} style={{ width: `${(timeLeft / TURN_TIME_LIMIT) * 100}%` }} />
                 </div>
+                <span className={`text-xs font-mono ${timeLeft <= 10 ? 'text-red-400' : 'text-slate-500'}`}>{timeLeft}s</span>
+              </div>
             )}
-            <div className="text-right text-xs text-slate-500 font-mono">
-                {gameData.status === 'playing' ? `${timeLeft}s` : ''}
+            <div className="flex items-center gap-1">
+              <button onClick={() => setSoundEnabled(!soundEnabled)} className="text-slate-400 hover:text-white p-1.5"><span className="sr-only">Toggle Sound</span>{soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}</button>
+              <button onClick={() => setShowQuitModal(true)} className="text-red-400 hover:text-red-300 p-1.5"><span className="sr-only">Quit Game</span><LogOut className="w-4 h-4" /></button>
             </div>
           </div>
-          
+        </header>
 
+        <div className="flex-grow-[4] min-h-0">
+          <Scoreboard />
+        </div>
 
-          {/* Mobile Scorecard (two-column: Upper | Lower) */}
-          <div className="lg:hidden col-span-1 bg-slate-800 rounded-2xl shadow-xl border border-slate-700 mt-3 mb-3">
-            <div className="p-3 bg-slate-800/50 border-b border-slate-700 flex items-center justify-between">
-              <h3 className="font-bold flex items-center gap-2 text-sm">
-                <Trophy className="w-4 h-4 text-yellow-500" /> 점수판
-              </h3>
-              <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <div className="text-[11px] font-medium text-indigo-400">P1</div>
-                  <div className="text-base font-bold text-white">{p1Score}</div>
-                </div>
-                <div className="w-px h-5 bg-slate-600"></div>
-                <div className="text-right">
-                  <div className="text-[11px] font-medium text-pink-400">P2</div>
-                  <div className="text-base font-bold text-white">{p2Score}</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3">
-              {(() => {
-                const upperCats = CATEGORIES.filter(c => c.section === 'upper');
-                const lowerCats = CATEGORIES.filter(c => c.section === 'lower');
-                const p1Uid = gameData.playerOrder[0];
-                const p2Uid = gameData.playerOrder[1];
-                const p1 = gameData.players[p1Uid];
-                const p2 = p2Uid ? gameData.players[p2Uid] : null;
-                const p1Upper = getUpperSum(p1.scores);
-                const p2Upper = p2 ? getUpperSum(p2.scores) : 0;
-
-                const NameBadge = ({ name, active }) => (
-                  <span className={`px-2 py-0.5 rounded text-[11px] font-bold whitespace-nowrap ${active ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-700 text-slate-400'}`}>{name}</span>
-                );
-
-                const Section = ({ title, cats }) => (
-                  <div className="bg-slate-900/40 rounded-xl border border-slate-700">
-                    <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700">
-                      <div className="text-xs font-bold text-slate-300">{title}</div>
-                    </div>
-                    <div className="grid grid-cols-3 text-xs gap-y-1">
-                      <div className="p-2 text-slate-500 border-b border-slate-800">항목</div>
-                      <div className={`p-2 text-center border-b border-slate-800 whitespace-nowrap ${gameData.currentTurn === p1Uid ? 'text-indigo-300' : 'text-slate-500'}`}>
-                        <NameBadge name={'P1'} active={gameData.currentTurn === p1Uid} />
-                      </div>
-                      <div className={`p-2 text-center border-b border-slate-800 whitespace-nowrap ${gameData.currentTurn === p2Uid ? 'text-pink-300' : 'text-slate-500'}`}>
-                        <NameBadge name={p2 ? 'P2' : '대기'} active={gameData.currentTurn === p2Uid} />
-                      </div>
-
-                      {cats.map((cat, idx) => {
-                        const p1Val = p1.scores[cat.id];
-                        const p2Val = p2 ? p2.scores[cat.id] : undefined;
-                        const canSelect = (uid) => (
-                          gameData.currentTurn === uid && gameData.status !== 'finished' && gameData.rollsLeft < 3 && gameData.players[uid]?.scores[cat.id] === undefined
-                        );
-                        const potential = calculateScore(gameData.dice, cat.id);
-                        const isSelected = selectedCategory === cat.id;
-                        const isP1Turn = gameData.currentTurn === p1Uid;
-                        const isP2Turn = gameData.currentTurn === p2Uid;
-
-                        const row = (
-                          <React.Fragment key={cat.id}>
-                            <div className="p-2 border-b border-slate-800 h-14 flex items-center justify-center">
-                              <CategoryIcon id={cat.id} section={cat.section} />
-                            </div>
-                            <div className={`p-2 h-14 flex items-center justify-center text-center border-b border-slate-800 relative text-sm ${p1Val !== undefined ? 'text-indigo-300 font-bold' : 'text-slate-500'} ${canSelect(p1Uid) ? 'cursor-pointer hover:bg-indigo-500/10' : ''} ${isSelected && isP1Turn ? 'bg-indigo-600/20 ring-1 ring-inset ring-indigo-500/50' : ''}`}
-                              onClick={() => handleScoreClick(cat.id, p1Uid)}>
-                              {p1Val !== undefined ? p1Val : (canSelect(p1Uid) ? <span className="text-indigo-400/60">{potential}</span> : '-')}
-                              {isSelected && isP1Turn && <Check className="absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 text-indigo-300" />}
-                            </div>
-                            <div className={`p-2 h-14 flex items-center justify-center text-center border-b border-slate-800 relative text-sm ${p2Val !== undefined ? 'text-pink-300 font-bold' : 'text-slate-500'} ${canSelect(p2Uid) ? 'cursor-pointer hover:bg-pink-500/10' : ''} ${isSelected && isP2Turn ? 'bg-pink-600/20 ring-1 ring-inset ring-pink-500/50' : ''}`}
-                              onClick={() => handleScoreClick(cat.id, p2Uid)}>
-                              {p2Val !== undefined ? p2Val : (canSelect(p2Uid) ? <span className="text-pink-400/60">{potential}</span> : '-')}
-                              {isSelected && isP2Turn && <Check className="absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 text-pink-300" />}
-                            </div>
-                          </React.Fragment>
-                        );
-
-                        const isUpper = title === 'Upper';
-                        const isAfterSixes = isUpper && (idx === cats.length - 1);
-                        if (isAfterSixes) {
-                          return (
-                            <React.Fragment key={`${cat.id}-with-sub`}>
-                              {row}
-                              <div className="p-2 text-slate-500 opacity-60 border-b border-slate-800 h-9 flex items-center justify-center text-center">
-                                <span className="leading-3">BONUS<span className="block text-[9px]">(35)</span></span>
-                              </div>
-                              <div className="p-2 text-center border-b border-slate-800 h-9 flex items-center justify-center">
-                                <span className={`${p1Upper >= 63 ? 'text-indigo-300' : 'text-slate-500'} text-xs`}>{p1Upper >= 63 ? '35' : `${p1Upper} / 63`}</span>
-                              </div>
-                              <div className="p-2 text-center border-b border-slate-800 h-9 flex items-center justify-center">
-                                <span className={`${p2Upper >= 63 ? 'text-pink-300' : 'text-slate-500'} text-xs`}>{p2Upper >= 63 ? '35' : `${p2Upper} / 63`}</span>
-                              </div>
-                            </React.Fragment>
-                          );
-                        }
-                        return row;
-                      })}
-                    </div>
-                  </div>
-                );
-
-                return (
-                  <>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Section title="Upper" cats={upperCats} />
-                      <Section title="Lower" cats={lowerCats} />
-                    </div>
-                    
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-
-          {/* Desktop Scorecard */}
-          <div className="hidden lg:flex flex-col col-span-1 lg:col-span-6 bg-slate-800 rounded-2xl shadow-xl overflow-hidden border border-slate-700">
-            <div className="p-3 bg-slate-800/50 border-b border-slate-700 flex-shrink-0 flex justify-between items-center">
-               <h3 className="font-bold flex items-center gap-2">
-                 <Trophy className="w-5 h-5 text-yellow-500" /> 점수판
-               </h3>
-                <div className="flex items-center gap-4">
-                    <div className="text-right">
-                        <div className="text-xs font-medium text-indigo-400">{p1.name}</div>
-                        <div className="text-xl font-bold text-white">{p1Score}</div>
-                    </div>
-                    <div className="w-px h-6 bg-slate-600"></div>
-                    <div className="text-right">
-                        <div className="text-xs font-medium text-pink-400">{p2 ? p2.name : '대기'}</div>
-                        <div className="text-xl font-bold text-white">{p2Score}</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div className="overflow-y-auto">
-              <table className="w-full text-base">
-                <thead>
-                  <tr className="bg-slate-900/50 text-slate-400">
-                    <th className="py-2 px-3 text-left">항목</th>
-                    <th className={`py-2 px-3 text-center w-24 ${gameData.currentTurn === p1Uid ? 'text-indigo-400 bg-indigo-500/10' : ''}`}>
-                      {p1.name}
-                    </th>
-                    <th className={`py-2 px-3 text-center w-24 ${gameData.currentTurn === p2Uid ? 'text-pink-400 bg-pink-500/10' : ''}`}>
-                      {p2 ? p2.name : '대기'}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-700/50">
-                  {CATEGORIES.map((cat, idx) => {
-                    const p1Val = p1.scores[cat.id];
-                    const p2Val = p2?.scores[cat.id];
-                    
-                    const isP1Turn = gameData.currentTurn === p1Uid;
-                    const isP2Turn = gameData.currentTurn === p2Uid;
-
-                    const canP1Select = isP1Turn && isMyTurn && p1Val === undefined && hasRolled;
-                    const canP2Select = isP2Turn && isMyTurn && p2Val === undefined && hasRolled;
-                    const potential = calculateScore(gameData.dice, cat.id);
-                    const isSelected = selectedCategory === cat.id;
-
-                    return (
-                      <React.Fragment key={cat.id}>
-                        {/* Subtotal Row injected before Choice */}
-                        {cat.id === 'choice' && (
-                          <tr className="bg-slate-800/80 font-bold text-sm">
-                            <td className="py-1 px-2 pl-3 text-slate-500 opacity-60">중간 합계 (35)</td>
-                            <td className={`py-1 px-2 text-center text-sm ${p1Upper >= 63 ? 'text-indigo-400 opacity-100' : 'text-slate-500 opacity-60'}`}>
-                                {p1Upper >= 63 ? '35' : `${p1Upper} / 63`}
-                            </td>
-                            <td className={`py-1 px-2 text-center text-sm ${p2Upper >= 63 ? 'text-pink-400 opacity-100' : 'text-slate-500 opacity-60'}`}>
-                                {p2Upper >= 63 ? '35' : `${p2Upper} / 63`}
-                            </td>
-                          </tr>
-                        )}
-                        <tr>
-                          <td className="py-2 px-4 font-medium text-slate-300">
-                            {cat.label}
-                          </td>
-                          <td 
-                            className={`py-2 px-4 text-center transition-colors relative
-                              ${p1Val !== undefined ? 'text-indigo-400 font-bold' : 'text-slate-600'}
-                              ${canP1Select ? 'cursor-pointer hover:bg-indigo-500/20' : ''}
-                              ${isSelected && isP1Turn ? 'bg-indigo-600/30 ring-inset ring-2 ring-indigo-500' : ''}
-                            `}
-                            onClick={() => handleScoreClick(cat.id, p1Uid)}
-                          >
-                            {p1Val !== undefined ? p1Val : (canP1Select ? <span className="text-indigo-500/50">{potential}</span> : '-')}
-                            {isSelected && isP1Turn && <Check className="absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 text-indigo-400" />}
-                          </td>
-                          <td 
-                            className={`py-2 px-4 text-center transition-colors relative
-                              ${p2Val !== undefined ? 'text-pink-400 font-bold' : 'text-slate-600'}
-                              ${canP2Select ? 'cursor-pointer hover:bg-pink-500/20' : ''}
-                              ${isSelected && isP2Turn ? 'bg-pink-600/30 ring-inset ring-2 ring-pink-500' : ''}
-                            `}
-                            onClick={() => handleScoreClick(cat.id, p2Uid)}
-                          >
-                            {p2Val !== undefined ? p2Val : (canP2Select ? <span className="text-pink-500/50">{potential}</span> : '-')}
-                            {isSelected && isP2Turn && <Check className="absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 text-pink-400" />}
-                          </td>
-                        </tr>
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Right: Game Area */}
-          <div className="col-span-1 lg:col-span-6 flex flex-col gap-4">
-            
-            {/* Desktop Status Banner */}
-            <div className="hidden lg:flex justify-between items-center bg-slate-800 py-1 px-4 rounded-xl border border-slate-700 relative overflow-hidden flex-shrink-0">
-                {gameData.status === 'playing' && (
-                    <div className="absolute bottom-0 left-0 h-1 bg-indigo-500 transition-all duration-1000 ease-linear" style={{ width: `${(timeLeft / TURN_TIME_LIMIT) * 100}%` }}></div>
-                )}
-              <div className="flex items-center gap-3">
-                <div className={`w-3 h-3 rounded-full ${isMyTurn ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                <span className="font-bold text-base">{turnLabel}</span>
-                {isMyTurn && <span className="text-sm text-green-400 font-normal ml-2">(나의 턴)</span>}
-              </div>
-              <div className="flex items-center gap-4 relative z-10">
-                 {gameData.status === 'playing' && (
-                    <div className="flex items-center gap-2 text-slate-400 font-mono">
-                        <Timer className="w-4 h-4" />
-                        <span className={`${timeLeft <= 10 ? 'text-red-400 font-bold animate-pulse' : ''}`}>{timeLeft}s</span>
-                    </div>
-                 )}
-                 <div className="h-6 w-px bg-slate-700"></div>
-                 <button onClick={() => setSoundEnabled(!soundEnabled)} className="text-slate-400 hover:text-white p-2 bg-slate-900 rounded-full">
-                   {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-                 </button>
-                 <button 
-                    onClick={() => setShowQuitModal(true)}
-                    className="flex items-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm font-bold transition"
-                 >
-                    <LogOut className="w-4 h-4" /> 나가기
-                 </button>
-              </div>
-            </div>
-            
-
-
-            {/* Dice Area */}
-            <div className={`flex-1 bg-slate-800 rounded-2xl border transition-colors duration-500 p-4 flex flex-col items-center justify-center relative overflow-hidden
-              ${isMyTurn ? 'border-indigo-500/50 shadow-[0_0_30px_rgba(99,102,241,0.1)]' : 'border-slate-700 grayscale-[0.3]'}`}>
-              
-              {showYachtEffect && <YachtEffect />}
-
-              {/* Game Over Modal */}
+        <main className="flex flex-col flex-grow-[1]">
+            <div className={`h-full bg-slate-800 rounded-xl border p-1 flex flex-col items-center justify-around relative overflow-hidden ${isMyTurn ? 'border-indigo-500/50' : 'border-slate-700'}`}>
+              {showYachtEffect && <YachtEffect onComplete={() => setShowYachtEffect(false)} />}
               {gameData.status === 'finished' && (
-                <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-500">
-                  <Trophy className="w-24 h-24 text-yellow-400 mb-6 drop-shadow-[0_0_15px_rgba(250,204,21,0.5)] animate-bounce" />
-                  <h2 className="text-5xl font-black text-white mb-2">게임 종료</h2>
-                  <div className="text-2xl mb-8 font-bold">
-                    {gameData.winner === 'draw' ? '무승부!' : (
-                       isTestMode 
-                         ? <span className="text-indigo-400">{gameData.players[gameData.winner].name} 승리!</span>
-                         : (gameData.winner === user.uid ? <span className="text-green-400">승리했습니다! 🏆</span> : <span className="text-red-400">패배했습니다 😢</span>)
-                    )}
-                    {gameData.quitBy && <div className="text-sm text-slate-500 mt-2 font-normal">(상대방의 기권으로 종료됨)</div>}
+                <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-md z-50 flex flex-col items-center justify-center p-4 text-center animate-in fade-in duration-500">
+                  <Trophy className="w-20 h-20 text-yellow-400 mb-4 drop-shadow-[0_0_15px_rgba(250,204,21,0.5)] animate-bounce" />
+                  <h2 className="text-5xl font-black text-white mb-2">Game Over</h2>
+                  <div className="text-xl mb-6 font-bold">
+                    {gameData.winner === 'draw' ? 'Draw!' : (isTestMode ? <span className="text-indigo-400">{gameData.players[gameData.winner].name} Wins!</span> : (gameData.winner === user?.uid ? <span className="text-green-400">You Win! 🏆</span> : <span className="text-red-400">You Lose! 😢</span>))}
+                    {gameData.quitBy && <div className="text-sm text-slate-500 mt-1 font-normal">(Opponent forfeited)</div>}
                   </div>
-                  
-                  {/* Detailed Results Card */}
-                  <div className="bg-slate-800 p-8 rounded-2xl border border-slate-600 w-full max-w-md shadow-2xl mb-8">
-                     <div className="flex justify-between items-center mb-6">
-                        <div className="text-left">
-                           <div className="text-slate-400 text-sm">Player 1</div>
-                           <div className="text-2xl font-bold text-indigo-400">{p1.name}</div>
-                        </div>
-                        <div className="text-4xl font-black text-white">{p1Score}</div>
-                     </div>
-                     <div className="w-full h-px bg-slate-600 mb-6"></div>
-                     <div className="flex justify-between items-center">
-                        <div className="text-left">
-                           <div className="text-slate-400 text-sm">Player 2</div>
-                           <div className="text-2xl font-bold text-pink-400">{p2 ? p2.name : 'Unknown'}</div>
-                        </div>
-                        <div className="text-4xl font-black text-white">{p2Score}</div>
-                     </div>
+                  <div className="bg-slate-800 p-6 rounded-xl border border-slate-600 w-full max-w-sm shadow-xl mb-6">
+                    <div className="flex justify-between items-center mb-3"><div className="text-left"><div className="text-slate-400 text-sm">Player 1</div><div className="text-xl font-bold text-indigo-400">{p1.name}</div></div><div className="text-4xl font-black text-white">{calculateTotal(p1.scores)}</div></div>
+                    <div className="w-full h-px bg-slate-600 my-3"></div>
+                    <div className="flex justify-between items-center"><div className="text-left"><div className="text-slate-400 text-sm">Player 2</div><div className="text-xl font-bold text-pink-400">{p2 ? p2.name : 'Unknown'}</div></div><div className="text-4xl font-black text-white">{p2 ? calculateTotal(p2.scores) : 0}</div></div>
                   </div>
-
-                  <button 
-                    onClick={() => window.location.reload()} 
-                    className="px-10 py-4 bg-white text-slate-900 font-bold rounded-full hover:bg-slate-200 transition transform hover:scale-105 shadow-xl flex items-center gap-2"
-                  >
-                    <RotateCcw className="w-5 h-5" /> 새 게임 시작
-                  </button>
+                  <button onClick={() => window.location.reload()} className="px-8 py-3 bg-white text-slate-900 font-bold rounded-full hover:bg-slate-200 transition transform hover:scale-105 shadow-lg flex items-center gap-2 text-base"><RotateCcw className="w-5 h-5" /> New Game</button>
                 </div>
               )}
-
-              {/* Dice Container */}
-              <div className="w-full max-w-lg flex justify-center items-center gap-2 sm:gap-4">
+              
+              <div className="w-full max-w-md flex justify-center items-start gap-3">
                 {gameData.dice.map((value, idx) => (
-                  <div key={idx} className="w-[18%] aspect-square flex flex-col items-center justify-center gap-1">
-                    <div className="w-full aspect-square">
-                      <Dice 
-                        value={value} 
-                        isHeld={gameData.held[idx]} 
-                        rolling={rolling && !gameData.held[idx]}
-                        disabled={!isMyTurn || gameData.status === 'finished' || value === 0}
-                        onClick={() => isMyTurn && toggleHold(idx)}
-                        soundEnabled={soundEnabled}
-                      />
+                  <div key={idx} className="w-[18%]">
+                    <div className="aspect-square">
+                      <Dice value={value} isHeld={gameData.held[idx]} onClick={() => toggleHold(idx)} rolling={rolling && !gameData.held[idx]} disabled={!isMyTurn || gameData.status === 'finished' || value === 0} soundEnabled={soundEnabled} />
                     </div>
-                    <div className="h-5 flex items-center justify-center">
-                      {gameData.held[idx] ? <Lock className="w-5 h-5 text-indigo-400" /> : (value !== 0 && <div />)}
-                    </div>
+                    <div className="h-5 flex items-center justify-center">{gameData.held[idx] && <Lock className="w-5 h-5 text-indigo-400" />}</div>
                   </div>
                 ))}
               </div>
 
-              {/* Controls */}
-              <div className="w-full max-w-md relative z-10">
-                
-                {/* 1. Initial Roll Button */}
+              <div className="w-full max-w-xs relative z-10">
                 {!hasRolled && (
-                  <button
-                    onClick={rollDice}
-                    disabled={!isMyTurn || rolling || gameData.status === 'finished'}
-                    className={`
-                      w-full py-2 rounded-2xl font-bold text-xl shadow-lg flex items-center justify-center gap-3 transition-all border-4 ${!isMyTurn ? 'bg-slate-700 text-slate-500 cursor-not-allowed opacity-50' : 'bg-indigo-600 hover:bg-indigo-500 text-white hover:scale-[1.02] hover:shadow-indigo-500/25 border-transparent'}`}>
-                    <RotateCcw className={`w-6 h-6 ${rolling ? 'animate-spin' : ''}`} />
-                    Roll (3)
-                  </button>
+                  <button onClick={rollDice} disabled={!isMyTurn || rolling || gameData.status === 'finished'} className={`w-full py-3 rounded-xl font-bold text-xl shadow-lg flex items-center justify-center gap-3 transition-all border-2 ${!isMyTurn ? 'bg-slate-700 text-slate-500 cursor-not-allowed opacity-50' : 'bg-indigo-600 hover:bg-indigo-500 text-white hover:scale-[1.02] hover:shadow-indigo-500/25 border-transparent'}`}><RotateCcw className="w-6 h-6 ${rolling && 'animate-spin'}" /> Roll (3)</button>
                 )}
-
-                {/* 2. Split Buttons (Roll & Play) */}
                 {hasRolled && (
-                  <div className="flex gap-4">
-                    <button
-                      onClick={rollDice}
-                      disabled={!isMyTurn || rolling || gameData.rollsLeft === 0 || gameData.status === 'finished'}
-                      className={`
-                        flex-1 py-2 rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all border-4 border-transparent
-                        ${!isMyTurn || gameData.rollsLeft === 0 
-                          ? 'bg-slate-700 text-slate-500 cursor-not-allowed' 
-                          : 'bg-slate-600 hover:bg-slate-500 text-white hover:bg-slate-500'}
-                      `}
-                    >
-                      <RotateCcw className={`w-5 h-5 ${rolling ? 'animate-spin' : ''}`} />
-                      Roll ({gameData.rollsLeft})
-                    </button>
-
-                    <button
-                      onClick={confirmScore}
-                      disabled={!selectedCategory || !isMyTurn || rolling}
-                      className={`
-                        flex-1 py-2 rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all border-4
-                        ${!selectedCategory 
-                          ? 'bg-indigo-900/50 text-indigo-300/50 cursor-not-allowed border-indigo-900/50' 
-                          : 'bg-indigo-600 hover:bg-indigo-500 text-white hover:scale-[1.02] border-indigo-400 shadow-indigo-500/25'}
-                      `}
-                    >
-                      <CheckCircle2 className="w-6 h-6" />
-                      Play
-                    </button>
+                  <div className="flex gap-3">
+                    <button onClick={rollDice} disabled={!isMyTurn || rolling || gameData.rollsLeft === 0 || gameData.status === 'finished'} className={`flex-1 py-3 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all border-2 border-transparent ${!isMyTurn || gameData.rollsLeft === 0 ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-slate-600 hover:bg-slate-500 text-white'}`}><RotateCcw className={`w-5 h-5 ${rolling && 'animate-spin'}`} /> Roll ({gameData.rollsLeft})</button>
+                    <button onClick={() => confirmScore()} disabled={!selectedCategory || !isMyTurn || rolling} className={`flex-1 py-3 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all border-2 ${!selectedCategory ? 'bg-indigo-900/50 text-indigo-300/50 cursor-not-allowed border-indigo-900/50' : 'bg-indigo-600 hover:bg-indigo-500 text-white hover:scale-[1.02] border-indigo-400 shadow-indigo-500/25'}`}><CheckCircle2 className="w-6 h-6" /> Play</button>
                   </div>
                 )}
-                
-                {/* Info Text */}
                 <div className="h-6 mt-2 text-center">
-                  {gameData.rollsLeft === 0 && isMyTurn && !selectedCategory && (
-                    <div className="text-amber-400 text-sm animate-pulse flex items-center justify-center gap-2 bg-amber-900/20 py-1 px-3 rounded-full inline-flex">
-                      <AlertCircle className="w-4 h-4" />
-                      점수판을 클릭하여 등록할 점수를 선택하세요
-                    </div>
-                  )}
-                  {hasRolled && isMyTurn && selectedCategory && (
-                    <div className="text-indigo-300 text-sm flex items-center justify-center gap-2 bg-indigo-900/30 py-1 px-3 rounded-full inline-flex animate-bounce">
-                      <CheckCircle2 className="w-4 h-4" />
-                      우측 'Play' 버튼을 눌러 턴을 마치세요
-                    </div>
-                  )}
-                  {!isMyTurn && gameData.status !== 'finished' && (
-                     <div className="text-slate-500 text-sm flex items-center justify-center gap-2">
-                        <Swords className="w-4 h-4" />
-                        상대방이 플레이 중입니다...
-                     </div>
-                  )}
+                  {gameData.rollsLeft === 0 && isMyTurn && !selectedCategory && <div className="text-amber-400 text-sm animate-pulse flex items-center justify-center gap-2"><AlertCircle className="w-4 h-4" /> Select a score to record</div>}
                 </div>
               </div>
-
             </div>
-          </div>
-        </div>
+        </main>
       </div>
     );
   }
-
-  return null;
+  
+  return <div className="flex h-screen items-center justify-center bg-slate-900 text-white">Loading...</div>;
 }
